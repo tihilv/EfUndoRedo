@@ -12,7 +12,7 @@ class Program
         await CreateContextAsync();
         Console.WriteLine("ok");
 
-        EfUndoManager undoManager = new EfUndoManager();
+        var undoManager = new EfUndoManager();
 
         Int32 blogId, post1Id, post2Id, post3Id;
             

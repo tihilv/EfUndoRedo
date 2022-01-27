@@ -2,16 +2,19 @@ namespace EfUndoable;
 
 public class EfUndoManager
 {
-    private readonly Stack<EfUndoableStep> _undoSteps = new();
-    private readonly Stack<EfUndoableStep> _redoSteps = new();
-
+    private readonly IStepStore<EfUndoableStep> _stepStore;
     private readonly List<IDbStrategyFactory> _dbStrategyFactories = new();
 
-    public Boolean HasUndo => _undoSteps.Any();
-    public Boolean HasRedo => _redoSteps.Any();
+    public bool HasUndo => _stepStore.HasUndo;
+    public bool HasRedo => _stepStore.HasRedo;
 
-    public EfUndoManager()
+    public EfUndoManager(): this(new DefaultStepStore<EfUndoableStep>())
     {
+    }
+
+    public EfUndoManager(IStepStore<EfUndoableStep> stepStore)
+    {
+        _stepStore = stepStore;
         RegisterDbStrategyFactory(new AutodetectChangesStrategyFactory());
         RegisterDbStrategyFactory(new MsSqlIdentityFixStrategyFactory());
     }
@@ -21,20 +24,18 @@ public class EfUndoManager
         _dbStrategyFactories.Add(dbStrategyFactory);
     }
 
-    public void RegisterStep(DbContextUndoable dbContext)
+    internal void RegisterStep(DbContextUndoable dbContext)
     {
         var step = new EfUndoableStep(dbContext);
-        _undoSteps.Push(step);
-        _redoSteps.Clear();
+        _stepStore.RegisterStep(step);
     }
 
-    public async ValueTask UndoAsync(DbContextUndoable dbContext)
+    internal async ValueTask UndoAsync(DbContextUndoable dbContext)
     {
         if (!HasUndo)
             throw new ApplicationException("There is no undo step.");
 
-        var step = _undoSteps.Pop();
-        _redoSteps.Push(step);
+        var step = _stepStore.GetUndoStep();
 
         var strategy = UseDbStrategiesAsync(dbContext);
         await strategy.StartStepAsync(step);
@@ -49,13 +50,12 @@ public class EfUndoManager
         }
     }
 
-    public async ValueTask RedoAsync(DbContextUndoable dbContext)
+    internal async ValueTask RedoAsync(DbContextUndoable dbContext)
     {
         if (!HasRedo)
             throw new ApplicationException("There is no redo step.");
 
-        var step = _redoSteps.Pop();
-        _undoSteps.Push(step);
+        var step = _stepStore.GetRedoStep();
 
         var strategy = UseDbStrategiesAsync(dbContext);
         await strategy.StartStepAsync(step);
