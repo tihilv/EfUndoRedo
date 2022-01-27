@@ -22,9 +22,10 @@ public abstract class DbContextUndoable : DbContext
         return base.SaveChangesAsync(cancellationToken);
     }
 
-    internal Task SaveChangesAfterUndoAsync()
+    internal async Task SaveChangesAfterUndoAsync()
     {
-        return base.SaveChangesAsync();        
+        await base.SaveChangesAsync();
+        ChangeTracker.Clear();
     }
     
     public ValueTask UndoAsync()

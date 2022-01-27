@@ -272,6 +272,74 @@ public class UndoRedoTests
         }
     }
 
+    [TestMethod]
+    public async Task EditDoubleUndoWithinSingleContextTestAsync()
+    {
+        using (var connection = BloggingContextSqliteInMemory.CreateConnection())
+        {
+            EfUndoManager undoManager = new EfUndoManager();
+            int post3Id;
+            await using (var context = BloggingContextSqliteInMemory.Create(connection, undoManager))
+            {
+                await WriteDefaultInfoAsync(context);
+            }
+
+            await using (var context = BloggingContextSqliteInMemory.Create(connection, undoManager))
+            {
+                var blog = context.Blogs.Include(b => b.Posts).Single();
+                blog.Rating = 4;
+                blog.Posts.Add(new Post() {Title = "Third post", Content = "With some content"});
+                await context.SaveChangesAsync();
+                post3Id = blog.Posts[1].PostId;
+            }
+
+            await using (var context = BloggingContextSqliteInMemory.Create(connection, undoManager))
+            {
+                await context.UndoAsync();
+                await context.UndoAsync();
+            }
+        }
+    }
+    
+    [TestMethod]
+    public async Task EditDoubleUndoRedoWithinSingleContextTestAsync()
+    {
+        using (var connection = BloggingContextSqliteInMemory.CreateConnection())
+        {
+            EfUndoManager undoManager = new EfUndoManager();
+            int post3Id;
+            await using (var context = BloggingContextSqliteInMemory.Create(connection, undoManager))
+            {
+                await WriteDefaultInfoAsync(context);
+            }
+
+            await using (var context = BloggingContextSqliteInMemory.Create(connection, undoManager))
+            {
+                var blog = context.Blogs.Include(b => b.Posts).Single();
+                blog.Rating = 4;
+                blog.Posts.Add(new Post() {Title = "Third post", Content = "With some content"});
+                await context.SaveChangesAsync();
+                post3Id = blog.Posts[1].PostId;
+            }
+
+            await using (var context = BloggingContextSqliteInMemory.Create(connection, undoManager))
+            {
+                await context.UndoAsync();
+                await context.UndoAsync();
+                await context.RedoAsync();
+                await context.RedoAsync();
+            }
+
+            await using (var context = BloggingContextSqliteInMemory.Create(connection, undoManager))
+            {
+                var blog = context.Blogs.Include(b => b.Posts).Single();
+                Assert.AreEqual(4, blog.Rating);
+                Assert.AreEqual(3, blog.Posts.Count);
+                Assert.AreEqual("Third post" , blog.Posts.Last().Title);
+                Assert.AreEqual(1, blog.Posts.Count(p=>p.PostId == post3Id));
+            }
+        }
+    }
     
     
     private async Task<(Int32 blogId, Int32 post1Id, Int32 post2Id)> WriteDefaultInfoAsync(BloggingContextSqliteInMemory context)
